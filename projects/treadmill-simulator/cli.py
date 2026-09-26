@@ -27,6 +27,15 @@ console = Console()
 MINIMUM_INCLINE_PERCENT = 0
 MAXIMUM_INCLINE_PERCENT = 15
 
+# lets the sex prompt accept short forms (m/f) in any case, normalized down
+# to the "male"/"female" strings the mifflin-st jeor formula expects
+SEX_INPUT_ALIASES = {
+    "male": "male",
+    "m": "male",
+    "female": "female",
+    "f": "female",
+}
+
 
 def collect_user_stats():
     """
@@ -46,9 +55,16 @@ def collect_user_stats():
     height_feet = FloatPrompt.ask("Height, feet part")
     height_inches = FloatPrompt.ask("Height, remaining inches part")
     age_years = FloatPrompt.ask("Age (years)")
-    # Prompt.ask with a choices list only accepts one of the listed answers,
-    # which keeps the mifflin-st jeor sex input unambiguous
-    sex = Prompt.ask("Biological sex", choices=["male", "female"])
+    # accept short forms (m/f, any case) alongside the full words, then
+    # normalize down to "male"/"female" so nothing downstream has to think
+    # about which spelling the person typed
+    sex_input = Prompt.ask(
+        "Biological sex (male/female, or m/f)",
+        choices=["male", "female", "m", "f"],
+        case_sensitive=False,
+        show_choices=False,
+    )
+    sex = SEX_INPUT_ALIASES[sex_input.lower()]
 
     # convert everything into the metric units calories.py works in, right at the
     # boundary between "user input" and "math", so nothing downstream has to
@@ -98,7 +114,9 @@ def print_results(result):
         f"(estimate: {result.calories_estimate:.0f})\n"
         f"[bold]Estimated heart rate:[/bold] "
         f"{result.heart_rate_low:.0f}-{result.heart_rate_high:.0f} bpm "
-        f"(estimate: {result.heart_rate_estimate:.0f})\n"
+        f"(estimate: {result.heart_rate_estimate:.0f}, "
+        f"max heart rate: {result.max_heart_rate_bpm:.0f})\n"
+        f"[bold]Workout Intensity based on MHR:[/bold] {result.workout_intensity_zone}\n"
         f"[bold]Elevation gain:[/bold] {result.elevation_gain_ft:.0f} ft",
         title="Results",
         border_style="magenta",
