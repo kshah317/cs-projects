@@ -21,7 +21,7 @@ from heart_rate import (
     estimated_heart_rate_bpm,
     ASSUMED_RESTING_HEART_RATE_BPM,
 )
-from session import compute_session
+from session import compute_session, workout_intensity_zone
 
 
 class UnitConversionTests(unittest.TestCase):
@@ -153,6 +153,41 @@ class SessionCalculationTests(unittest.TestCase):
     def test_flat_ground_has_zero_elevation_gain(self):
         result = compute_session(70, 170, 30, "male", speed_mph=4.0, incline_percent=0, duration_minutes=30)
         self.assertAlmostEqual(result.elevation_gain_ft, 0, places=6)
+
+    def test_max_heart_rate_matches_tanaka_formula(self):
+        # the session's reported max heart rate should be the same tanaka
+        # number heart_rate.py computes on its own, not a separate estimate
+        result = compute_session(70, 170, 30, "male", speed_mph=4.0, incline_percent=2, duration_minutes=20)
+        self.assertAlmostEqual(result.max_heart_rate_bpm, estimated_max_heart_rate_bpm(30), places=6)
+
+
+class WorkoutIntensityZoneTests(unittest.TestCase):
+    """checks the heart-rate-zone classification against hand-picked percentages of max heart rate"""
+
+    def test_very_light_zone(self):
+        # 55% of a 200 max heart rate is 110, which is below the 60% cutoff for light
+        self.assertEqual(workout_intensity_zone(110, 200), "Very Light")
+
+    def test_light_zone(self):
+        # 65% of 200 is 130
+        self.assertEqual(workout_intensity_zone(130, 200), "Light")
+
+    def test_moderate_zone(self):
+        # 75% of 200 is 150
+        self.assertEqual(workout_intensity_zone(150, 200), "Moderate")
+
+    def test_hard_zone(self):
+        # 85% of 200 is 170
+        self.assertEqual(workout_intensity_zone(170, 200), "Hard")
+
+    def test_maximum_zone(self):
+        # 95% of 200 is 190
+        self.assertEqual(workout_intensity_zone(190, 200), "Maximum")
+
+    def test_zone_boundary_is_inclusive_on_the_low_end(self):
+        # exactly 80% of 200 (160) should count as hard, not moderate, since
+        # each zone's minimum percentage belongs to that zone
+        self.assertEqual(workout_intensity_zone(160, 200), "Hard")
 
 
 if __name__ == "__main__":
