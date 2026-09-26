@@ -13,6 +13,7 @@ projects/
 inventory-rental-system/ <- role-based rental/checkout system, python + sqlite
 battleship/ <- simple, single-player battleship game, html + css + javascript
 password-toolkit/ <- password strength checker and passphrase generator, java
+treadmill-simulator/ <- interactive terminal treadmill workout simulator, python
 ```
 
 ## Projects
@@ -22,3 +23,4 @@ password-toolkit/ <- password strength checker and passphrase generator, java
 | [inventory-rental-system](projects/inventory-rental-system) | business logic, relational data, concurrency | Role-based equipment rental/checkout system: category rules, late fees, reservations, and concurrency-safe checkout, built on Python and SQLite. |
 | [battleship](projects/battleship) | interactive game design, event-driven UI | A simple, single-player Battleship game playable in the browser, with a built-in rules and background panel and a from-scratch computer opponent. |
 | [password-toolkit](projects/password-toolkit) | security, entropy estimation, randomness | A command line toolkit that estimates real password strength (entropy, breached-password and pattern detection) and generates secure diceware-style passphrases, built on plain Java. |
+| [treadmill-simulator](projects/treadmill-simulator) | applied math, simulation, terminal UI | An animated terminal treadmill workout simulator that estimates personalized calorie burn using the Mifflin-St Jeor and ACSM formulas, built on Python and the rich library. |
