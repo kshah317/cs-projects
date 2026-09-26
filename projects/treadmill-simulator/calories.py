@@ -139,3 +139,15 @@ def total_kcal_per_minute(weight_kg, height_cm, age_years, sex, speed_mph, incli
     resting = resting_kcal_per_minute(weight_kg, height_cm, age_years, sex)
     exercise = exercise_kcal_per_minute(speed_mph, incline_percent, weight_kg)
     return resting + exercise
+
+
+def total_vo2_ml_per_kg_per_minute(speed_mph, incline_percent):
+    """
+    returns the standard (non-personalized) total vo2 cost of the workout, meaning
+    the generic one-MET resting baseline plus the exercise-only cost. this is
+    different from the calorie math above, which swaps that generic baseline out
+    for a personalized mifflin-st jeor rate. heart_rate.py needs the generic
+    version instead, since the %vo2-reserve method it uses is built around the
+    standard 3.5 ml/kg/min resting baseline, not a personalized one
+    """
+    return ONE_MET_VO2_ML_PER_KG_PER_MIN + acsm_exercise_vo2_ml_per_kg_per_minute(speed_mph, incline_percent)
