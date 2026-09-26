@@ -1,4 +1,4 @@
-  # Treadmill Simulator
+# Treadmill Simulator
 
 A terminal program that replays a treadmill workout and estimates your calorie burn, using the same kind of formulas real gym equipment runs on.
 
