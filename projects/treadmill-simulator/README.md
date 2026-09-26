@@ -1,4 +1,4 @@
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  # Treadmill Simulator
+# Treadmill Simulator
 
 A terminal program that estimates calorie burn, heart rate, and elevation gain for a single walk or run, using the same kind of formulas real gym equipment runs on.
 
@@ -54,4 +54,3 @@ python -m unittest tests.py -v
 ## Limitations
 
 This is a set of estimates, not lab measurements. The calorie range is a reasonable ballpark; the heart rate range is a looser one, since it's inferred from age alone rather than anything measured about your actual fitness or cardiovascular response. The ACSM formulas behind the calorie math also have a gap between "fast walk" and "slow jog" where neither equation was really validated, and this program just picks 5 mph as the cutoff point rather than modeling that transition precisely. Treat all of it the way you'd treat the numbers on a gym treadmill console: a useful estimate, not a diagnosis.
-                                                                                                                                                                                                                                                                                       
