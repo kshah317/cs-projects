@@ -1,7 +1,0 @@
-[
-  {"duration_minutes": 5, "speed_mph": 2.5, "incline_percent": 0},
-  {"duration_minutes": 5, "speed_mph": 3.5, "incline_percent": 2},
-  {"duration_minutes": 10, "speed_mph": 4.0, "incline_percent": 4},
-  {"duration_minutes": 5, "speed_mph": 5.5, "incline_percent": 2},
-  {"duration_minutes": 5, "speed_mph": 3.0, "incline_percent": 0}
-]
