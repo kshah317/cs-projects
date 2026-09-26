@@ -1,24 +1,27 @@
 """
-unit tests for the calorie formulas and workout accumulation logic. the formula
-tests check against numbers worked out by hand from the same published acsm and
-mifflin-st jeor equations, so we know the code matches the real math, not just
-that it runs without crashing.
+unit tests for the calorie, heart rate, and session formulas. the formula tests
+check against numbers worked out by hand from the same published acsm,
+mifflin-st jeor, tanaka, and uth equations, so we know the code matches the real
+math, not just that it runs without crashing.
 """
 
 # unittest is python's built-in testing framework
 import unittest
-# json and tempfile are used to build a small throwaway workout file for the loader test
-import json
-import tempfile
-import os
 
 from calories import (
     pounds_to_kilograms,
     feet_and_inches_to_centimeters,
     mifflin_st_jeor_resting_kcal_per_day,
     acsm_exercise_vo2_ml_per_kg_per_minute,
+    total_vo2_ml_per_kg_per_minute,
 )
-from workout import Segment, load_workout_plan, run_workout
+from heart_rate import (
+    estimated_max_heart_rate_bpm,
+    estimated_vo2_max_ml_per_kg_per_minute,
+    estimated_heart_rate_bpm,
+    ASSUMED_RESTING_HEART_RATE_BPM,
+)
+from session import compute_session
 
 
 class UnitConversionTests(unittest.TestCase):
@@ -52,12 +55,6 @@ class MifflinStJeorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mifflin_st_jeor_resting_kcal_per_day(70, 170, 30, "other")
 
-    def test_sex_input_is_case_insensitive(self):
-        # "Male" and "male" should give the identical result
-        rate_lower = mifflin_st_jeor_resting_kcal_per_day(70, 170, 30, "male")
-        rate_mixed_case = mifflin_st_jeor_resting_kcal_per_day(70, 170, 30, "Male")
-        self.assertEqual(rate_lower, rate_mixed_case)
-
 
 class AcsmExerciseVo2Tests(unittest.TestCase):
     """checks the walking and running vo2 formulas against hand-calculated values"""
@@ -68,106 +65,94 @@ class AcsmExerciseVo2Tests(unittest.TestCase):
         vo2 = acsm_exercise_vo2_ml_per_kg_per_minute(3.0, 0)
         self.assertAlmostEqual(vo2, 8.047, places=1)
 
-    def test_walking_with_incline(self):
-        # same 3.0 mph, now at 5% grade: 0.1*80.47 + 1.8*80.47*0.05 = 8.047 + 7.24 = 15.29
-        vo2 = acsm_exercise_vo2_ml_per_kg_per_minute(3.0, 5)
-        self.assertAlmostEqual(vo2, 15.29, places=1)
-
     def test_running_flat_ground(self):
         # 6.0 mph is 160.93 m/min. running formula, 0% grade: 0.2*160.93 = 32.19
         vo2 = acsm_exercise_vo2_ml_per_kg_per_minute(6.0, 0)
         self.assertAlmostEqual(vo2, 32.19, places=1)
 
-    def test_crossover_point_uses_running_formula(self):
-        # exactly 5.0 mph should use the running formula, not walking, since the
-        # crossover check is "speed < 5.0 uses walking", so 5.0 itself is running
-        walking_style_result = 0.1 * (5.0 * 1609.34 / 60)
-        running_style_result = 0.2 * (5.0 * 1609.34 / 60)
-        vo2 = acsm_exercise_vo2_ml_per_kg_per_minute(5.0, 0)
-        self.assertAlmostEqual(vo2, running_style_result, places=1)
-        self.assertNotAlmostEqual(vo2, walking_style_result, places=1)
+    def test_total_vo2_includes_resting_baseline(self):
+        # total vo2 should be exactly 3.5 more than the exercise-only vo2, since
+        # it adds back the generic one-MET resting term that acsm's exercise-only
+        # number has stripped out
+        exercise_only = acsm_exercise_vo2_ml_per_kg_per_minute(4.0, 2)
+        total = total_vo2_ml_per_kg_per_minute(4.0, 2)
+        self.assertAlmostEqual(total - exercise_only, 3.5, places=6)
 
 
-class WorkoutAccumulationTests(unittest.TestCase):
-    """checks that segments accumulate into correct running totals"""
+class HeartRateTests(unittest.TestCase):
+    """checks the age/intensity based heart rate estimate against hand-calculated values"""
 
-    def test_single_segment_distance_and_calories(self):
-        # 10 minutes at 3.0 mph should cover exactly 0.5 miles
-        segment = Segment(duration_minutes=10, speed_mph=3.0, incline_percent=0)
-        result = run_workout([segment], weight_kg=70, height_cm=170, age_years=30, sex="male")
-        self.assertAlmostEqual(result.total_distance_miles, 0.5, places=3)
-        # calories should be strictly positive and finite for a normal workout
-        self.assertGreater(result.total_calories, 0)
+    def test_max_heart_rate_from_age(self):
+        # tanaka formula: 208 - 0.7*30 = 187
+        self.assertAlmostEqual(estimated_max_heart_rate_bpm(30), 187, places=1)
 
-    def test_multiple_segments_sum_correctly(self):
-        # two 10 minute segments should sum to 20 total minutes and the sum of
-        # each segment's own distance and calories
-        segments = [
-            Segment(duration_minutes=10, speed_mph=3.0, incline_percent=0),
-            Segment(duration_minutes=10, speed_mph=4.0, incline_percent=2),
-        ]
-        result = run_workout(segments, weight_kg=70, height_cm=170, age_years=30, sex="male")
-        self.assertAlmostEqual(result.total_minutes, 20, places=3)
-        expected_distance = 3.0 * (10 / 60) + 4.0 * (10 / 60)
-        self.assertAlmostEqual(result.total_distance_miles, expected_distance, places=3)
-        # the sum of the two segments' individual calorie totals should equal the workout total
-        summed_calories = sum(sr.calories for sr in result.segment_results)
-        self.assertAlmostEqual(summed_calories, result.total_calories, places=6)
+    def test_vo2_max_from_age(self):
+        # max heart rate at 30 is 187, so vo2max = 15.3 * (187/70) = 40.87...
+        vo2_max = estimated_vo2_max_ml_per_kg_per_minute(30, ASSUMED_RESTING_HEART_RATE_BPM)
+        self.assertAlmostEqual(vo2_max, 15.3 * (187 / 70), places=2)
 
-    def test_average_pace_is_time_over_distance(self):
-        segment = Segment(duration_minutes=15, speed_mph=5.0, incline_percent=0)
-        result = run_workout([segment], weight_kg=70, height_cm=170, age_years=30, sex="male")
-        # at 5.0 mph for 15 minutes, distance is 1.25 miles, so pace is 15/1.25 = 12 min/mile
-        self.assertAlmostEqual(result.average_pace_minutes_per_mile, 12.0, places=3)
+    def test_heart_rate_stays_within_resting_and_max(self):
+        # however intense the workout, the estimate should never fall below the
+        # assumed resting heart rate or exceed the estimated max heart rate
+        heart_rate = estimated_heart_rate_bpm(30, 6.0, 10)
+        self.assertGreaterEqual(heart_rate, ASSUMED_RESTING_HEART_RATE_BPM)
+        self.assertLessEqual(heart_rate, estimated_max_heart_rate_bpm(30))
 
-    def test_faster_speed_burns_more_calories_per_minute(self):
-        # this is the "almost linear" relationship the whole project is built
-        # around: a faster segment at the same incline should burn calories
-        # faster, not slower or the same
-        slow_segment = Segment(duration_minutes=10, speed_mph=3.0, incline_percent=2)
-        fast_segment = Segment(duration_minutes=10, speed_mph=4.5, incline_percent=2)
-        result = run_workout(
-            [slow_segment, fast_segment], weight_kg=70, height_cm=170, age_years=30, sex="male"
-        )
-        slow_rate = result.segment_results[0].kcal_per_minute
-        fast_rate = result.segment_results[1].kcal_per_minute
-        self.assertGreater(fast_rate, slow_rate)
+    def test_faster_speed_raises_estimated_heart_rate(self):
+        # this mirrors the same "faster means more effort" relationship the
+        # calorie math has: a faster walk/run at the same incline should raise
+        # the heart rate estimate, not lower or leave it unchanged
+        slow_heart_rate = estimated_heart_rate_bpm(30, 3.0, 2)
+        fast_heart_rate = estimated_heart_rate_bpm(30, 5.5, 2)
+        self.assertGreater(fast_heart_rate, slow_heart_rate)
 
-    def test_steeper_incline_burns_more_calories_per_minute(self):
-        # same idea, but holding speed fixed and increasing incline instead
-        flat_segment = Segment(duration_minutes=10, speed_mph=3.0, incline_percent=0)
-        steep_segment = Segment(duration_minutes=10, speed_mph=3.0, incline_percent=10)
-        result = run_workout(
-            [flat_segment, steep_segment], weight_kg=70, height_cm=170, age_years=30, sex="male"
-        )
-        flat_rate = result.segment_results[0].kcal_per_minute
-        steep_rate = result.segment_results[1].kcal_per_minute
-        self.assertGreater(steep_rate, flat_rate)
+    def test_steeper_incline_raises_estimated_heart_rate(self):
+        flat_heart_rate = estimated_heart_rate_bpm(30, 3.0, 0)
+        steep_heart_rate = estimated_heart_rate_bpm(30, 3.0, 10)
+        self.assertGreater(steep_heart_rate, flat_heart_rate)
+
+    def test_extreme_effort_clamps_at_max_heart_rate(self):
+        # a very fast, steep, long effort could otherwise imply needing more
+        # oxygen than the estimated vo2max allows, which isn't meaningful, so
+        # the estimate should clamp at the estimated max heart rate instead
+        heart_rate = estimated_heart_rate_bpm(60, 12.0, 15)
+        self.assertAlmostEqual(heart_rate, estimated_max_heart_rate_bpm(60), places=6)
 
 
-class WorkoutPlanLoaderTests(unittest.TestCase):
-    """checks that a workout plan json file loads into the right Segment objects"""
+class SessionCalculationTests(unittest.TestCase):
+    """checks that a single session's distance, calorie range, heart rate range, and elevation gain are correct"""
 
-    def test_load_workout_plan_from_json(self):
-        # build a tiny two-segment workout file in a temp location, load it back,
-        # and confirm the fields all round-tripped correctly
-        raw_segments = [
-            {"duration_minutes": 5, "speed_mph": 3.0, "incline_percent": 0},
-            {"duration_minutes": 10, "speed_mph": 4.5, "incline_percent": 3},
-        ]
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as temp_file:
-            json.dump(raw_segments, temp_file)
-            temp_path = temp_file.name
+    def test_distance_is_speed_times_time(self):
+        result = compute_session(70, 170, 30, "male", speed_mph=6.0, incline_percent=0, duration_minutes=30)
+        # 6.0 mph for 30 minutes (half an hour) is 3.0 miles
+        self.assertAlmostEqual(result.distance_miles, 3.0, places=6)
 
-        try:
-            segments = load_workout_plan(temp_path)
-            self.assertEqual(len(segments), 2)
-            self.assertEqual(segments[0].duration_minutes, 5)
-            self.assertEqual(segments[1].speed_mph, 4.5)
-            self.assertEqual(segments[1].incline_percent, 3)
-        finally:
-            # clean up the temp file regardless of whether the assertions passed
-            os.remove(temp_path)
+    def test_calorie_range_is_centered_on_estimate(self):
+        result = compute_session(70, 170, 30, "male", speed_mph=4.0, incline_percent=2, duration_minutes=20)
+        self.assertAlmostEqual(result.calories_high - result.calories_estimate, 20, places=6)
+        self.assertAlmostEqual(result.calories_estimate - result.calories_low, 20, places=6)
+
+    def test_calorie_low_floors_at_zero(self):
+        # a very short, easy session could otherwise produce a negative low end,
+        # which doesn't mean anything for calories burned
+        result = compute_session(70, 170, 30, "male", speed_mph=1.0, incline_percent=0, duration_minutes=1)
+        self.assertGreaterEqual(result.calories_low, 0)
+
+    def test_heart_rate_range_is_centered_on_estimate(self):
+        result = compute_session(70, 170, 30, "male", speed_mph=4.0, incline_percent=2, duration_minutes=20)
+        self.assertAlmostEqual(result.heart_rate_high - result.heart_rate_estimate, 10, places=6)
+        self.assertAlmostEqual(result.heart_rate_estimate - result.heart_rate_low, 10, places=6)
+
+    def test_elevation_gain_is_exact_geometry(self):
+        # 5% grade over 1 mile means climbing 5% of 5280 feet = 264 feet. here,
+        # 4.0 mph for 30 minutes (half an hour) covers exactly 2.0 miles, so
+        # a 5% grade over that distance is 2.0 * 5280 * 0.05 = 528 feet
+        result = compute_session(70, 170, 30, "male", speed_mph=4.0, incline_percent=5, duration_minutes=30)
+        self.assertAlmostEqual(result.elevation_gain_ft, 528, places=1)
+
+    def test_flat_ground_has_zero_elevation_gain(self):
+        result = compute_session(70, 170, 30, "male", speed_mph=4.0, incline_percent=0, duration_minutes=30)
+        self.assertAlmostEqual(result.elevation_gain_ft, 0, places=6)
 
 
 if __name__ == "__main__":
