@@ -16,6 +16,10 @@ You enter your weight, height, age, and gender once. Then you describe the walk 
 - an estimated heart rate range
 - your elevation gain
 
+Here's what a run looks like end to end, from entering your stats to getting the results card:
+
+![The CLI asking for stats, then a walk/run, then printing a results card with calories, heart rate, and elevation](screenshots/cli-example.png)
+
 ## How the three outputs work
 
 **Calories** come from two pieces added together: your personalized resting burn rate (from the Mifflin-St Jeor equation, using your weight, height, age, and gender) plus the extra burn from the exercise itself (from walking/running formulas published by the American College of Sports Medicine, the same body of research most treadmill software is quietly built on). The result is reported as a range, plus or minus 20 calories around the estimate, since real calorie burn depends on things like your exact stride and fitness level that this model can't know.
