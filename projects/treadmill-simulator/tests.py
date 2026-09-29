@@ -22,6 +22,7 @@ from heart_rate import (
     ASSUMED_RESTING_HEART_RATE_BPM,
 )
 from session import compute_session, workout_intensity_zone
+from cli import is_within_range
 
 
 class UnitConversionTests(unittest.TestCase):
@@ -188,6 +189,26 @@ class WorkoutIntensityZoneTests(unittest.TestCase):
         # exactly 80% of 200 (160) should count as hard, not moderate, since
         # each zone's minimum percentage belongs to that zone
         self.assertEqual(workout_intensity_zone(160, 200), "Hard")
+
+
+class InputRangeValidationTests(unittest.TestCase):
+    """checks the pure range-check helper used to validate cli inputs like weight, height, age, speed, and duration"""
+
+    def test_value_inside_range_is_valid(self):
+        self.assertTrue(is_within_range(50, 0, 100))
+
+    def test_value_at_minimum_boundary_is_valid(self):
+        # boundaries are inclusive, so the minimum itself should count as valid
+        self.assertTrue(is_within_range(0, 0, 100))
+
+    def test_value_at_maximum_boundary_is_valid(self):
+        self.assertTrue(is_within_range(100, 0, 100))
+
+    def test_value_below_minimum_is_invalid(self):
+        self.assertFalse(is_within_range(-1, 0, 100))
+
+    def test_value_above_maximum_is_invalid(self):
+        self.assertFalse(is_within_range(101, 0, 100))
 
 
 if __name__ == "__main__":
